@@ -5,7 +5,7 @@ import os
 
 RAW_DATA_PATH = 'data/raw/raw_games.csv'
 
-def fetch_recent_box_scores(days_back=3):
+def fetch_recent_box_scores(days_back=90):
     today = datetime.today()
     recent_data = []
 
@@ -93,5 +93,5 @@ def append_to_raw_csv(new_data: pd.DataFrame):
     print(f"✅ Appended {len(new_data)} new rows to {RAW_DATA_PATH}")
 
 if __name__ == '__main__':
-    new_games_df = fetch_recent_box_scores(days_back=3)
+    new_games_df = fetch_recent_box_scores(days_back=90)
     append_to_raw_csv(new_games_df)

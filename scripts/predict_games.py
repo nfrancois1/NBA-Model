@@ -1,5 +1,3 @@
-# scripts/predict_games.py
-
 import pandas as pd
 import pickle
 from datetime import datetime
@@ -8,6 +6,20 @@ from sklearn.ensemble import RandomForestClassifier
 
 FEATURES_PATH = 'data/processed/features.csv'
 MODEL_PATH = 'models/over_under_model.pkl'
+
+# 🔁 ESPN full team name -> abbreviation used in features.csv
+TEAM_NAME_MAP = {
+    'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+    'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+    'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+    'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+    'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+    'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+    'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+    'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+    'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+    'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+}
 
 def predict_today_games():
     print("🔮 Loading model and features...")
@@ -28,21 +40,25 @@ def predict_today_games():
     predictions = []
 
     for _, row in espn_games.iterrows():
-        team1 = row['home_team']
-        team2 = row['away_team']
+        # Normalize full names to abbreviations
+        team1 = TEAM_NAME_MAP.get(row['home_team'])
+        team2 = TEAM_NAME_MAP.get(row['away_team'])
 
-        # Get most recent game for both teams
-        team1_stats = features_df[features_df['TEAM'] == team1].sort_values('GAME_DATE').dropna().iloc[-1:]  # dropna added
+        if not team1 or not team2:
+            print(f"❌ Unknown team name in matchup: {row['away_team']} @ {row['home_team']}")
+            continue
+
+        # Get most recent data for both teams
+        team1_stats = features_df[features_df['TEAM'] == team1].sort_values('GAME_DATE').dropna().iloc[-1:]
         team2_stats = features_df[features_df['TEAM'] == team2].sort_values('GAME_DATE').dropna().iloc[-1:]
 
         if team1_stats.empty or team2_stats.empty:
-            print(f"⚠️ Skipping {team1} vs {team2} — missing any historical data.")
+            print(f"⚠️ Skipping {row['away_team']} vs {row['home_team']} — missing historical data.")
             continue
 
-        # If either team lacks full rolling average, warn but continue
         if pd.isna(team1_stats['AVG_PTS_LAST_5'].values[0]) or pd.isna(team2_stats['AVG_PTS_LAST_5'].values[0]):
             print(f"⚠️ Incomplete data for {team1} vs {team2} — using best available.")
-        
+
         avg_pts = (
             team1_stats['AVG_PTS_LAST_5'].values[0] +
             team2_stats['AVG_PTS_LAST_5'].values[0]
@@ -62,7 +78,7 @@ def predict_today_games():
         label = 'OVER' if prediction == 1 else 'UNDER'
 
         predictions.append({
-            'matchup': f"{team2} @ {team1}",
+            'matchup': f"{row['away_team']} @ {row['home_team']}",
             'prediction': label
         })
 

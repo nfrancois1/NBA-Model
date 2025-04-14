@@ -1,20 +1,32 @@
 import pandas as pd
 import os
+import ast
 
 CLEANED_DATA_PATH = 'data/processed/games_cleaned.csv'
 FEATURES_OUTPUT_PATH = 'data/processed/features.csv'
+
+def safe_parse_list(s):
+    try:
+        val = ast.literal_eval(s)
+        return val if isinstance(val, list) else []
+    except:
+        return []
 
 def generate_features():
     print("🔄 Loading cleaned game data...")
     df = pd.read_csv(CLEANED_DATA_PATH)
 
     print("📈 Generating team-level statistics...")
-    # Flatten data: one row per team per game
     rows = []
+    skipped = 0
     for _, row in df.iterrows():
-        teams = row['TEAMS']
-        results = row['TEAM_RESULTS']
+        teams = safe_parse_list(row['TEAMS'])
+        results = safe_parse_list(row['TEAM_RESULTS'])
         total_points = row['TOTAL_POINTS']
+
+        if len(teams) != 2 or len(results) != 2:
+            skipped += 1
+            continue
 
         for i in range(2):
             team = teams[i]
@@ -29,10 +41,11 @@ def generate_features():
                 'TOTAL_POINTS': total_points
             })
 
+    print(f"⚠️ Skipped {skipped} malformed rows.")
     flat_df = pd.DataFrame(rows)
 
-    # Sort by team and game date
-    flat_df['GAME_DATE'] = pd.to_datetime(flat_df['GAME_DATE'])
+    flat_df['GAME_DATE'] = pd.to_datetime(flat_df['GAME_DATE'], errors='coerce')
+    flat_df = flat_df.dropna(subset=['GAME_DATE'])
     flat_df = flat_df.sort_values(['TEAM', 'GAME_DATE'])
 
     print("🔁 Calculating rolling features...")
