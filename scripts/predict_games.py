@@ -1,7 +1,7 @@
 import pandas as pd
-import pickle
+import joblib
 from datetime import datetime
-from espn_api import fetch_espn_today_games
+from espn_api import fetch_espn_games
 from sklearn.ensemble import RandomForestClassifier
 
 FEATURES_PATH = 'data/processed/features.csv'
@@ -24,13 +24,13 @@ TEAM_NAME_MAP = {
 def predict_today_games():
     print("🔮 Loading model and features...")
     with open(MODEL_PATH, 'rb') as f:
-        model: RandomForestClassifier = pickle.load(f)
+        model: RandomForestClassifier = joblib.load(MODEL_PATH)
 
     features_df = pd.read_csv(FEATURES_PATH)
     features_df['GAME_DATE'] = pd.to_datetime(features_df['GAME_DATE'])
 
     print("🗓️ Getting today’s games from ESPN...")
-    espn_games = fetch_espn_today_games()
+    espn_games = pd.DataFrame(fetch_espn_games())
 
     if espn_games.empty:
         print("⚠️ No games found to predict today.")
