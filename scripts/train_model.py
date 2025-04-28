@@ -8,7 +8,7 @@ import os
 FEATURES_PATH = 'data/processed/features.csv'
 MODEL_OUTPUT_PATH = 'models/over_under_model.pkl'
 
-THRESHOLD = 220  # You can tune this later based on the average total points
+THRESHOLD = 210  # You can tune this later based on the average total points
 
 def train_model():
     print("📊 Loading feature data...")
