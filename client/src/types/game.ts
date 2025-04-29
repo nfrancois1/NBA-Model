@@ -7,4 +7,15 @@ export interface Game {
   status: string;
   game_time: string | null;
   is_future_game: boolean;
+}
+
+export interface BettingSite {
+  name: string;
+  logo: string;
+  url: string;
+  odds: {
+    homeTeamOdds: string;
+    awayTeamOdds: string;
+    overUnder: string;
+  };
 } 

@@ -2,6 +2,9 @@ import { Game } from '@/types/game';
 import { format, parseISO } from 'date-fns';
 import { Clock, TrendingUp, BarChart3, Percent } from 'lucide-react';
 import { motion } from 'framer-motion';
+import BettingSites from './BettingSites';
+import { useState, useEffect } from 'react';
+import { fetchBettingOdds } from '@/lib/betting-api';
 
 interface GameCardProps {
   game: Game;
@@ -155,51 +158,57 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
 
   const isFutureGame = game.status.toLowerCase() === 'scheduled' || game.status.toLowerCase() === 'pre-game';
   
-  // Generate realistic betting odds for display purposes
-  const generateBettingOdds = () => {
-    // Home team win probability (0-100)
-    const homeWinProb = Math.round(Math.random() * 100);
-    
-    // Generate realistic spread based on win probability
-    // Teams with higher win probability will be favored (negative spread)
-    let spread: number;
-    if (homeWinProb > 50) {
-      // Home team is favored
-      spread = -Number(((homeWinProb - 50) / 5).toFixed(1));
-    } else {
-      // Away team is favored
-      spread = Number(((50 - homeWinProb) / 5).toFixed(1));
-    }
-    
-    // Over/Under (total) typically ranges from 195-245 for NBA games
-    const totalPoints = Number((Math.random() * 50 + 195).toFixed(1));
-    
-    // Generate moneyline odds based on win probability
-    // Formula converts probability to American odds
-    const generateMoneyline = (winProb: number): number => {
-      if (winProb >= 50) {
-        // Favorite: negative odds (how much you need to bet to win $100)
-        return Math.round((-100 * winProb) / (100 - winProb));
-      } else {
-        // Underdog: positive odds (how much you win on $100 bet)
-        return Math.round((100 * (100 - winProb)) / winProb);
+  // Use the betting API instead of generating random odds
+  const [odds, setOdds] = useState<any>(null);
+  const [isLoadingOdds, setIsLoadingOdds] = useState(false);
+  
+  useEffect(() => {
+    const loadOdds = async () => {
+      if (!isFutureGame) return;
+      
+      try {
+        setIsLoadingOdds(true);
+        const bettingData = await fetchBettingOdds(game.game_id, game.home_team, game.away_team);
+        
+        // Use DraftKings as the default odds provider for the summary card
+        const draftKingsOdds = bettingData.find(site => site.name === 'DraftKings');
+        
+        if (draftKingsOdds) {
+          // Extract spread, total, and win probability from the odds
+          const homeOdds = parseInt(draftKingsOdds.odds.homeTeamOdds);
+          const awayOdds = parseInt(draftKingsOdds.odds.awayTeamOdds.replace('+', ''));
+          
+          // Calculate win probability based on moneyline odds
+          const homeWinProb = homeOdds < 0 
+            ? Math.round(-homeOdds / (-homeOdds + 100) * 100) 
+            : Math.round(100 / (homeOdds + 100) * 100);
+          
+          const awayWinProb = 100 - homeWinProb;
+          
+          // Extract spread from the odds
+          const spread = homeOdds < awayOdds ? (homeOdds / -100) * 10 : (awayOdds / 100) * 10;
+          
+          // Extract total from over/under
+          const totalPoints = parseFloat(draftKingsOdds.odds.overUnder.replace('O/U ', ''));
+          
+          setOdds({
+            homeMoneyline: homeOdds,
+            awayMoneyline: awayOdds,
+            spread: homeOdds < awayOdds ? -Math.abs(spread) : Math.abs(spread),
+            totalPoints,
+            homeWinProb,
+            awayWinProb
+          });
+        }
+      } catch (err) {
+        console.error('Error loading odds:', err);
+      } finally {
+        setIsLoadingOdds(false);
       }
     };
     
-    const homeMoneyline = generateMoneyline(homeWinProb);
-    const awayMoneyline = generateMoneyline(100 - homeWinProb);
-    
-    return {
-      spread,
-      totalPoints,
-      homeMoneyline,
-      awayMoneyline,
-      homeWinProb,
-      awayWinProb: 100 - homeWinProb,
-    };
-  };
-  
-  const odds = isFutureGame ? generateBettingOdds() : null;
+    loadOdds();
+  }, [game.game_id, game.home_team, game.away_team, isFutureGame]);
 
   return (
     <motion.div 
@@ -375,6 +384,15 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
                 </div>
               </motion.div>
             </motion.div>
+          )}
+
+          {/* Betting Sites with redirect */}
+          {isFutureGame && (
+            <BettingSites 
+              gameId={game.game_id} 
+              homeTeam={game.home_team} 
+              awayTeam={game.away_team}
+            />
           )}
 
           {/* Game in progress indicator */}
