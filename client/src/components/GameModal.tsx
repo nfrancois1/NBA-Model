@@ -3,6 +3,12 @@ import { Game } from '@/types/game';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronRight, BarChart2, TrendingUp, Percent, Clock, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import {
+  TEAM_RATINGS,
+  TEAM_AVG_POINTS,
+  TEAM_AVG_POINTS_ALLOWED,
+  HOME_COURT_ADVANTAGE
+} from '@/lib/betting-api';
 
 interface GameModalProps {
   game: Game | null;
@@ -41,10 +47,7 @@ export default function GameModal({ game, onClose }: GameModalProps) {
 
   useEffect(() => {
     if (!game) return;
-    
-    // In a real app, you would fetch the actual data from your API
     setLoading(true);
-    
     setTimeout(() => {
       if (game.status.toLowerCase() === 'final') {
         // Game has happened, show historical stats
@@ -65,23 +68,67 @@ export default function GameModal({ game, onClose }: GameModalProps) {
           away_points_in_paint: Math.round(Math.random() * 20 + 30)
         });
       }
+      // Data-driven prediction model for all games
+      const homeTeam = game.home_team;
+      const awayTeam = game.away_team;
+      const homeRating = TEAM_RATINGS[homeTeam] || 75;
+      const awayRating = TEAM_RATINGS[awayTeam] || 75;
+      const rawSpread = (awayRating - homeRating) + HOME_COURT_ADVANTAGE;
+      const spread = Math.round(rawSpread * 10) / 10;
+      const homeAvgScore = TEAM_AVG_POINTS[homeTeam] || 112;
+      const awayAvgScore = TEAM_AVG_POINTS[awayTeam] || 112;
+      const homeAvgAllowed = TEAM_AVG_POINTS_ALLOWED[homeTeam] || 113;
+      const awayAvgAllowed = TEAM_AVG_POINTS_ALLOWED[awayTeam] || 113;
+      const predictedHomeScore = (homeAvgScore + awayAvgAllowed) / 2;
+      const predictedAwayScore = (awayAvgScore + homeAvgAllowed) / 2;
+      const baseTotal = Math.round((predictedHomeScore + predictedAwayScore) * 10) / 10;
+      const homeWinProb = Math.max(Math.min(Math.round(50 - (spread * 3.3)), 95), 5);
+
+      // Generate dynamic key factors based on team statistics
+      const keyFactors = [];
       
-      // For all games, also generate prediction model
+      // Factor 1: Scoring efficiency comparison
+      const homeScoringEfficiency = homeAvgScore / homeAvgAllowed;
+      const awayScoringEfficiency = awayAvgScore / awayAvgAllowed;
+      if (homeScoringEfficiency > awayScoringEfficiency) {
+        keyFactors.push(`${homeTeam} has better scoring efficiency (${homeScoringEfficiency.toFixed(2)}) than ${awayTeam} (${awayScoringEfficiency.toFixed(2)})`);
+      } else {
+        keyFactors.push(`${awayTeam} has better scoring efficiency (${awayScoringEfficiency.toFixed(2)}) than ${homeTeam} (${homeScoringEfficiency.toFixed(2)})`);
+      }
+
+      // Factor 2: Defensive strength
+      if (homeAvgAllowed < awayAvgAllowed) {
+        keyFactors.push(`${homeTeam} has stronger defense (${homeAvgAllowed.toFixed(1)} PPG allowed) than ${awayTeam} (${awayAvgAllowed.toFixed(1)} PPG allowed)`);
+      } else {
+        keyFactors.push(`${awayTeam} has stronger defense (${awayAvgAllowed.toFixed(1)} PPG allowed) than ${homeTeam} (${homeAvgAllowed.toFixed(1)} PPG allowed)`);
+      }
+
+      // Factor 3: Offensive firepower
+      if (homeAvgScore > awayAvgScore) {
+        keyFactors.push(`${homeTeam} has higher scoring offense (${homeAvgScore.toFixed(1)} PPG) than ${awayTeam} (${awayAvgScore.toFixed(1)} PPG)`);
+      } else {
+        keyFactors.push(`${awayTeam} has higher scoring offense (${awayAvgScore.toFixed(1)} PPG) than ${homeTeam} (${homeAvgScore.toFixed(1)} PPG)`);
+      }
+
+      // Factor 4: Team strength rating
+      if (homeRating > awayRating) {
+        keyFactors.push(`${homeTeam} has higher team rating (${homeRating}) than ${awayTeam} (${awayRating})`);
+      } else {
+        keyFactors.push(`${awayTeam} has higher team rating (${awayRating}) than ${homeTeam} (${homeRating})`);
+      }
+
+      // Factor 5: Home court advantage impact
+      const homeCourtImpact = HOME_COURT_ADVANTAGE;
+      keyFactors.push(`Home court advantage adds ${homeCourtImpact.toFixed(1)} points to ${homeTeam}'s rating`);
+
       setPredictionModel({
-        predicted_total: Math.round(Math.random() * 30 + 210),
-        predicted_spread: +(Math.random() * 12 - 6).toFixed(1),
-        home_win_probability: Math.round(Math.random() * 100),
-        key_factors: [
-          "Home team recent shooting efficiency",
-          "Away team defensive rating on the road",
-          "Head-to-head matchup history",
-          "Key player injuries",
-          "Back-to-back game fatigue"
-        ]
+        predicted_total: baseTotal,
+        predicted_spread: spread,
+        home_win_probability: homeWinProb,
+        key_factors: keyFactors
       });
-      
       setLoading(false);
-    }, 1000); // Simulate loading time
+    }, 1000);
   }, [game]);
 
   if (!game) return null;
