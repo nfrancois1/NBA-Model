@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import BettingSites from './BettingSites';
 import { useState, useEffect } from 'react';
 import { fetchBettingOdds } from '@/lib/betting-api';
+import InjuryBadge from './InjuryBadge';
 
 interface GameCardProps {
   game: Game;
@@ -210,6 +211,37 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
     loadOdds();
   }, [game.game_id, game.home_team, game.away_team, isFutureGame]);
 
+  // Fetch team injuries on component mount
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    const fetchInjuries = async () => {
+      if (!game.prediction?.homeTeamInjuries && !game.prediction?.awayTeamInjuries) {
+        try {
+          setLoading(true);
+          const homeResponse = await fetch(`/api/injuries?team=${encodeURIComponent(game.home_team)}`);
+          const awayResponse = await fetch(`/api/injuries?team=${encodeURIComponent(game.away_team)}`);
+          
+          if (homeResponse.ok && awayResponse.ok) {
+            const homeData = await homeResponse.json();
+            const awayData = await awayResponse.json();
+            
+            // In a real application, you would update the game's prediction with this data
+            console.log('Fetched injury data:', { homeData, awayData });
+          }
+        } catch (error) {
+          console.error('Error fetching injury data:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
+    if (isFutureGame) {
+      fetchInjuries();
+    }
+  }, [game, isFutureGame]);
+
   return (
     <motion.div 
       className="overflow-hidden rounded-xl cursor-pointer"
@@ -217,13 +249,13 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
       transition={{ type: "spring", stiffness: 400, damping: 10 }}
       onClick={() => onGameClick && onGameClick(game)}
     >
-      <div className="bg-gradient-to-r from-slate-600 to-slate-700 p-1">
-        <div className="bg-slate-900 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-indigo-600/30 to-purple-600/30 p-1">
+        <div className="bg-[#0e1530] rounded-lg p-6 backdrop-blur-sm">
           {/* Game header with status */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-medium text-slate-400">
+              <Clock className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm font-medium text-indigo-300">
                 {formatGameTime(game.game_time)}
               </span>
             </div>
@@ -233,8 +265,8 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
                 game.status.toLowerCase() === 'final' 
                   ? 'bg-green-500/20 text-green-300 border border-green-500/30' 
                   : game.status.toLowerCase() === 'in progress'
-                  ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
-                  : 'bg-slate-700/30 text-slate-400 border border-slate-600/30'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
               }`}
             >
               {game.status}
@@ -251,9 +283,19 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
               transition={{ duration: 0.5 }}
             >
               <div className="flex items-center space-x-4 lg:flex-row-reverse lg:space-x-reverse">
-                <div className="text-slate-200 font-bold text-lg">{game.away_team}</div>
+                <div className="text-white font-bold text-lg relative">
+                  {game.away_team}
+                  {game.prediction?.awayTeamInjuries && (
+                    <span className="absolute -top-2 -right-2">
+                      <InjuryBadge
+                        injuries={game.prediction.awayTeamInjuries}
+                        team={game.away_team}
+                      />
+                    </span>
+                  )}
+                </div>
                 <motion.div 
-                  className="w-16 h-16 relative rounded-full bg-slate-800 flex items-center justify-center overflow-hidden"
+                  className="w-16 h-16 relative rounded-full bg-[#182042] flex items-center justify-center overflow-hidden border border-indigo-500/20"
                   whileHover={{ scale: 1.1, rotate: 10 }}
                 >
                   <img 
@@ -267,12 +309,12 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
                 </motion.div>
               </div>
               <div className={`text-4xl font-bold ${
-                isFutureGame ? 'text-slate-600' : 'text-slate-200'
+                isFutureGame ? 'text-indigo-300/50' : 'text-indigo-300'
               }`}>
                 {game.away_score || '-'}
               </div>
               {isFutureGame && (
-                <div className="flex items-center text-sm text-slate-400">
+                <div className="flex items-center text-sm text-indigo-400">
                   <Percent className="w-3 h-3 mr-1" />
                   <span>{odds?.awayWinProb}%</span>
                 </div>
@@ -291,10 +333,15 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
                 repeatType: "reverse" 
               }}
             >
-              <div className="text-slate-500 text-2xl font-bold">VS</div>
+              <div className="text-indigo-400/70 text-2xl font-bold">VS</div>
               {isFutureGame && (
-                <div className="px-4 py-1 rounded-full bg-slate-800 text-slate-400 text-xs">
+                <div className="px-4 py-1 rounded-full bg-[#182042] text-indigo-300 text-xs border border-indigo-500/20">
                   {formatGameTime(game.game_time)}
+                </div>
+              )}
+              {game.prediction && (
+                <div className="mt-2 px-3 py-1 rounded-full bg-purple-900/30 text-purple-300 text-xs font-medium border border-purple-500/30">
+                  {game.prediction.outcome} ({game.prediction.confidence * 100}%)
                 </div>
               )}
             </motion.div>
@@ -308,7 +355,7 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
             >
               <div className="flex items-center space-x-4">
                 <motion.div 
-                  className="w-16 h-16 relative rounded-full bg-slate-800 flex items-center justify-center overflow-hidden"
+                  className="w-16 h-16 relative rounded-full bg-[#182042] flex items-center justify-center overflow-hidden border border-indigo-500/20"
                   whileHover={{ scale: 1.1, rotate: -10 }}
                 >
                   <img 
@@ -320,15 +367,25 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
                     }}
                   />
                 </motion.div>
-                <div className="text-slate-200 font-bold text-lg">{game.home_team}</div>
+                <div className="text-white font-bold text-lg relative">
+                  {game.home_team}
+                  {game.prediction?.homeTeamInjuries && (
+                    <span className="absolute -top-2 -right-2">
+                      <InjuryBadge
+                        injuries={game.prediction.homeTeamInjuries}
+                        team={game.home_team}
+                      />
+                    </span>
+                  )}
+                </div>
               </div>
               <div className={`text-4xl font-bold ${
-                isFutureGame ? 'text-slate-600' : 'text-slate-200'
+                isFutureGame ? 'text-indigo-300/50' : 'text-indigo-300'
               }`}>
                 {game.home_score || '-'}
               </div>
               {isFutureGame && (
-                <div className="flex items-center text-sm text-slate-400">
+                <div className="flex items-center text-sm text-indigo-400">
                   <Percent className="w-3 h-3 mr-1" />
                   <span>{odds?.homeWinProb}%</span>
                 </div>
@@ -339,36 +396,36 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
           {/* Betting info for future games */}
           {isFutureGame && (
             <motion.div 
-              className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-slate-800"
+              className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-indigo-500/20"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
               <motion.div 
-                className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-3 text-center"
+                className="bg-gradient-to-br from-indigo-900/40 to-indigo-800/20 rounded-lg p-3 text-center border border-indigo-500/20"
                 whileHover={{ y: -5, boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
               >
-                <div className="text-xs text-slate-500 mb-1">SPREAD</div>
-                <div className="text-slate-200 font-bold flex justify-center items-center">
-                  <span className="text-sm text-slate-400 mr-1">{game.home_team.split(' ').pop()}</span>
+                <div className="text-xs text-indigo-400 mb-1">SPREAD</div>
+                <div className="text-white font-bold flex justify-center items-center">
+                  <span className="text-sm text-indigo-400 mr-1">{game.home_team.split(' ').pop()}</span>
                   <span>{odds && odds.spread > 0 ? '+' : ''}{odds?.spread}</span>
                 </div>
               </motion.div>
               
               <motion.div 
-                className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-3 text-center"
+                className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 rounded-lg p-3 text-center border border-purple-500/20"
                 whileHover={{ y: -5, boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
               >
-                <div className="text-xs text-slate-500 mb-1">TOTAL</div>
-                <div className="text-slate-200 font-bold">O/U {odds?.totalPoints}</div>
+                <div className="text-xs text-purple-400 mb-1">TOTAL</div>
+                <div className="text-white font-bold">O/U {odds?.totalPoints}</div>
               </motion.div>
               
               <motion.div 
-                className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-lg p-3 text-center"
+                className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 rounded-lg p-3 text-center border border-blue-500/20"
                 whileHover={{ y: -5, boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
               >
-                <div className="text-xs text-slate-500 mb-1">ML</div>
-                <div className="text-slate-200 font-bold flex flex-col text-xs">
+                <div className="text-xs text-blue-400 mb-1">ML</div>
+                <div className="text-white font-bold flex flex-col text-xs">
                   <div className="flex justify-between px-2">
                     <span>{game.away_team.split(' ').pop()}</span>
                     <span className={odds && odds.awayMoneyline > 0 ? 'text-green-400' : 'text-red-400'}>
@@ -398,36 +455,36 @@ export default function GameCard({ game, onGameClick }: GameCardProps) {
           {/* Game in progress indicator */}
           {game.status.toLowerCase() === 'in progress' && (
             <motion.div 
-              className="mt-4 p-2 rounded-lg bg-slate-800/20 border border-slate-700/30 flex items-center justify-center space-x-2"
+              className="mt-4 p-2 rounded-lg bg-blue-900/20 border border-blue-700/30 flex items-center justify-center space-x-2"
               animate={{ 
-                borderColor: ['rgba(100, 116, 139, 0.3)', 'rgba(148, 163, 184, 0.5)', 'rgba(100, 116, 139, 0.3)'],
+                borderColor: ['rgba(59, 130, 246, 0.3)', 'rgba(99, 180, 255, 0.5)', 'rgba(59, 130, 246, 0.3)'],
               }}
               transition={{ duration: 2, repeat: Infinity }}
             >
               <div className="flex space-x-1">
                 <motion.div 
-                  className="w-2 h-2 rounded-full bg-slate-400"
+                  className="w-2 h-2 rounded-full bg-blue-400"
                   animate={{ 
                     opacity: [1, 0.4, 1],
                   }}
                   transition={{ duration: 1, repeat: Infinity, delay: 0 }}
                 />
                 <motion.div 
-                  className="w-2 h-2 rounded-full bg-slate-400"
+                  className="w-2 h-2 rounded-full bg-blue-400"
                   animate={{ 
                     opacity: [1, 0.4, 1],
                   }}
                   transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
                 />
                 <motion.div 
-                  className="w-2 h-2 rounded-full bg-slate-400"
+                  className="w-2 h-2 rounded-full bg-blue-400"
                   animate={{ 
                     opacity: [1, 0.4, 1],
                   }}
                   transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
                 />
               </div>
-              <span className="text-slate-400 text-sm font-medium">LIVE</span>
+              <span className="text-blue-300 text-sm font-medium">LIVE</span>
             </motion.div>
           )}
         </div>
